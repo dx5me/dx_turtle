@@ -4,33 +4,74 @@ import random
 
 import math
 
-random.seed(7)
-
 zx = turtle.Screen()
 
 dx = turtle.Turtle()
 
 RAIL_Y = -16   #Storing Rail level at one level so wheels and other parts could be stored at same level
 
+# The scene is designed on an 800 x 600 grid. On a bigger (or smaller) screen
+# every coordinate is multiplied by SCALE, and HALF_W / HALF_H tell us how far
+# the visible area reaches in design units, so the sky, cliffs and rails can
+# stretch all the way to the screen edges.
+DESIGN_W = 800
+DESIGN_H = 600
+SCALE = 1.0
+HALF_W = DESIGN_W / 2
+HALF_H = DESIGN_H / 2
+
+
 def setup_screen():
     zx.title("Train Project")
-    zx.setup(800, 600)
+    zx.setup(width=1.0, height=1.0)  # Window as big as the screen
+    window = zx.getcanvas().winfo_toplevel()
+    window.attributes("-fullscreen", True)  # True fullscreen, no title bar
     zx.bgcolor("#141a33") # Dark blue background
+    # Remove turtle's sunken border and paint the gaps around the canvas the same blue
+    zx.getcanvas().config(borderwidth=0, highlightthickness=0)
+    zx.getcanvas().configure(bg="#141a33")
+    window.configure(bg="#141a33")
     zx.tracer(0)  # Turn off automatic screen updates; zx.update() shows everything at the end
     dx.speed(0)  # Fastest turtle speed
     dx.hideturtle()  # Hide the turtle cursor for a cleaner look
+
+    # Escape leaves fullscreen, F11 toggles it back
+    window.bind("<Escape>", lambda event: window.attributes("-fullscreen", False))
+    window.bind("<F11>", lambda event: window.attributes(
+        "-fullscreen", not window.attributes("-fullscreen")))
+    # Redraw whenever the window changes size ("+" keeps turtle's own resize handler)
+    window.bind("<Configure>", on_resize, add="+")
+
+
+def update_scale():
+    global SCALE, HALF_W, HALF_H
+    window = zx.getcanvas().winfo_toplevel()
+    zx.screensize(1, 1)  # Shrink first so turtle hides any scrollbars it showed mid-resize
+    window.update()
+    width = max(window.winfo_width(), 200)
+    height = max(window.winfo_height(), 150)
+    # Fit the whole 800 x 600 design on screen without stretching it
+    SCALE = min(width / DESIGN_W, height / DESIGN_H)
+    HALF_W = width / 2 / SCALE
+    HALF_H = height / 2 / SCALE
+    zx.screensize(width - 4, height - 4)  # Scroll area just inside the window, so turtle hides its scrollbars
+
+
+def pos(x, y):
+    # Convert a design coordinate to a screen coordinate
+    return (x * SCALE, y * SCALE)
 
 
 def draw_polygon(points, color):
     dx.pensize(1)
     dx.color(color)
     dx.penup()
-    dx.goto(points[0])
+    dx.goto(pos(*points[0]))
     dx.pendown()
     dx.begin_fill()
     for point in points[1:]:
-        dx.goto(point)
-    dx.goto(points[0])  # Close the polygon
+        dx.goto(pos(*point))
+    dx.goto(pos(*points[0]))  # Close the polygon
     dx.end_fill()
     dx.penup()  # Lift the pen to avoid drawing lines when moving to the next shape
 
@@ -41,39 +82,39 @@ def draw_rectangle(x, y, width, height, color):
 
 def draw_circle(x, y, radius, color, outline_color=None):
     if outline_color is not None:
-        dx.pensize(2)
+        dx.pensize(max(1, 2 * SCALE))
         dx.color(outline_color, color)  # Pen colour for the outline, fill colour inside
     else:
         dx.pensize(1)
         dx.color(color)
     dx.penup()
     dx.setheading(0)  # Reset the heading to 0 degrees
-    dx.goto(x, y - radius)  # Move to the starting point of the circle
+    dx.goto(pos(x, y - radius))  # Move to the starting point of the circle
     dx.pendown()
     dx.begin_fill()
-    dx.circle(radius)
+    dx.circle(radius * SCALE)
     dx.end_fill()
     dx.penup()  # Lift the pen to avoid drawing lines when moving to the next shape
 
 
 def draw_line(x1, y1, x2, y2, color, width):
-    dx.pensize(width)
+    dx.pensize(max(1, width * SCALE))
     dx.color(color)
     dx.penup()
-    dx.goto(x1, y1)
+    dx.goto(pos(x1, y1))
     dx.pendown()
-    dx.goto(x2, y2)
+    dx.goto(pos(x2, y2))
     dx.penup()  # Lift the pen to avoid drawing lines when moving to the next shape
 
 
 def draw_stars(count):
     for _ in range(count):
-        x = random.randint(-400, 400)
-        y = random.randint(100, 300)
+        x = random.randint(int(-HALF_W), int(HALF_W))
+        y = random.randint(100, int(HALF_H))
         size = random.randint(2, 4)
         dx.penup()
-        dx.goto(x, y)
-        dx.dot(size, "#e6ecff")
+        dx.goto(pos(x, y))
+        dx.dot(max(1, size * SCALE), "#e6ecff")
 
 
 def draw_moon(x, y, radius):
@@ -83,28 +124,30 @@ def draw_moon(x, y, radius):
 
 
 def draw_mountains():
-    points = [(-400, 20), (-316, 76), (-211, 44), (-106, 116), (20, 52),
-              (125, 104), (251, 64), (400, 112), (400, -32), (-400, -32)]
+    points = [(-HALF_W, 20), (-316, 76), (-211, 44), (-106, 116), (20, 52),
+              (125, 104), (251, 64), (HALF_W, 112), (HALF_W, -32), (-HALF_W, -32)]
 
     draw_polygon(points, "#1d2442")  # Darker shade for mountains
 
 
 def draw_canyon_back():
-    draw_rectangle(-106, -20, 294, 300, "#10142a")
+    draw_rectangle(-106, -20, 294, HALF_H - 20, "#10142a")
 
 
 def draw_river():
-    draw_polygon([(-85, -292), (159, -284), (159, -320), (-85, -320)], "#2c4a74")
+    draw_polygon([(-85, -292), (159, -284), (159, -HALF_H), (-85, -HALF_H)], "#2c4a74")
     draw_line(-68, -300, 12, -298, "#4f75a6", 2)
     draw_line(49, -304, 129, -302, "#4f75a6", 2)
 
 
 def draw_headlight_beam():
     light = (-119, 40)
-    draw_polygon([light, (400, 150), (400, -90)], "#232a48")
-    draw_polygon([light, (400, 115), (400, -55)], "#2f3656")
-    draw_polygon([light, (400, 82), (400, -22)], "#40445f")
-    draw_polygon([light, (400, 52), (400, 8)], "#6b6955")
+    # The beam spreads by the same angle however far right the screen goes
+    reach = (HALF_W + 119) / 519
+    draw_polygon([light, (HALF_W, 40 + 110 * reach), (HALF_W, 40 - 130 * reach)], "#232a48")
+    draw_polygon([light, (HALF_W, 40 + 75 * reach), (HALF_W, 40 - 95 * reach)], "#2f3656")
+    draw_polygon([light, (HALF_W, 40 + 42 * reach), (HALF_W, 40 - 62 * reach)], "#40445f")
+    draw_polygon([light, (HALF_W, 40 + 12 * reach), (HALF_W, 40 - 32 * reach)], "#6b6955")
 
 
 def draw_bridge_supports():
@@ -161,27 +204,27 @@ def draw_broken_rails():
 
 def draw_cliffs():
     # Left cliff: jagged right edge facing the canyon.
-    draw_polygon([(-400, -24), (-85, -24), (-70, -80), (-89, -160),
-                  (-62, -252), (-85, -320), (-400, -320)], "#4a3a35")
+    draw_polygon([(-HALF_W, -24), (-85, -24), (-70, -80), (-89, -160),
+                  (-62, -252), (-85, -HALF_H), (-HALF_W, -HALF_H)], "#4a3a35")
     # Right cliff: slightly darker, as if it's more in shadow.
-    draw_polygon([(400, -24), (163, -24), (150, -92), (173, -180),
-                  (142, -260), (159, -320), (400, -320)], "#433430")
+    draw_polygon([(HALF_W, -24), (163, -24), (150, -92), (173, -180),
+                  (142, -260), (159, -HALF_H), (HALF_W, -HALF_H)], "#433430")
 
 
 def draw_rock_layers():
 
-    for y in range(-72, -320, -36):
+    for y in range(-72, int(-HALF_H), -36):
         # Left cliff layer, tilted 4 pixels so it doesn't look ruler-straight.
-        draw_line(-400, y, -100, y - 4, "#3a2d29", 3)
+        draw_line(-HALF_W, y, -100, y - 4, "#3a2d29", 3)
         # Right cliff layer, tilted the opposite way.
-        draw_line(178, y + 4, 400, y, "#352824", 3)
+        draw_line(178, y + 4, HALF_W, y, "#352824", 3)
 
 
 def draw_grass():
     # Thin dark grass strip on top of the left cliff.
-    draw_rectangle(-400, -20, 315, 8, "#2f3a2c")
+    draw_rectangle(-HALF_W, -20, HALF_W - 85, 8, "#2f3a2c")
     # Same on the right cliff.
-    draw_rectangle(163, -20, 237, 8, "#2f3a2c")
+    draw_rectangle(163, -20, HALF_W - 163, 8, "#2f3a2c")
 
 
 def draw_bridge_deck():
@@ -190,15 +233,16 @@ def draw_bridge_deck():
 
 
 def draw_tracks():
-
-    for x in range(-392, 20, 19):
+    # Step back from -392 in 19s so the ties keep the same spacing on wide screens
+    first_tie = -392 - 19 * math.ceil((HALF_W - 392) / 19)
+    for x in range(first_tie, 20, 19):
         # Each tie is a short thick dash.
         draw_line(x, -20, x + 8, -20, "#2a201b", 4)
 
-    for x in range(104, 400, 19):
+    for x in range(104, int(HALF_W), 19):
         draw_line(x, -20, x + 8, -20, "#2a201b", 4)
-    draw_line(-400, RAIL_Y, 26, RAIL_Y, "#9aa0aa", 3)  # Left rail, up to the break
-    draw_line(98, RAIL_Y, 400, RAIL_Y, "#9aa0aa", 3)   # Right rail, after the break
+    draw_line(-HALF_W, RAIL_Y, 26, RAIL_Y, "#9aa0aa", 3)  # Left rail, up to the break
+    draw_line(98, RAIL_Y, HALF_W, RAIL_Y, "#9aa0aa", 3)   # Right rail, after the break
 
 
 def draw_signal_lamp():
@@ -264,10 +308,12 @@ def draw_locomotive():
     draw_circle(-127, 40, 5, "#ffffff")
 
 
-def main():
-    setup_screen()  # Must run first so the window size and background are set before drawing
+def draw_scene():
+    random.seed(7)  # Same stars, fog and debris on every redraw
+    update_scale()
+    dx.clear()
     # Back to front: sky, then canyon, then the bridge, then cliffs, then the train on top
-    draw_stars(40)
+    draw_stars(int(40 * HALF_W / 400))  # More stars on wider screens
     draw_moon(276, 224, 32)
     draw_mountains()
     draw_canyon_back()
@@ -289,6 +335,27 @@ def main():
     draw_passenger_car()
     draw_locomotive()
     zx.update()  # Show everything we drew while tracer was off
+
+
+last_size = None
+pending_redraw = None
+
+def on_resize(event):
+    global last_size, pending_redraw
+    size = (event.width, event.height)
+    if event.widget is not zx.getcanvas().winfo_toplevel() or size == last_size:
+        return
+    last_size = size
+    # Wait until the user stops dragging the window edge, then redraw once
+    window = zx.getcanvas().winfo_toplevel()
+    if pending_redraw is not None:
+        window.after_cancel(pending_redraw)
+    pending_redraw = window.after(150, draw_scene)
+
+
+def main():
+    setup_screen()  # Must run first so the window size and background are set before drawing
+    draw_scene()
 
 
 main()
